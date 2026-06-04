@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Débloqueur Facture-Fantôme – Dépôt de Dossier</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --primary: #6C63FF; --primary-light: #8B85FF;
+    --secondary: #FF6584; --accent: #43E97B;
+    --accent2: #F7971E; --dark: #0b0b14;
+    --card: rgba(26, 26, 46, 0.65); --text: #E8E8F0; --text-muted: #8888AA;
+    --border: rgba(255, 255, 255, 0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { 
+    font-family:'Inter',sans-serif; 
+    background-color: var(--dark); 
+    color:var(--text); 
+    min-height:100vh; 
+    padding:20px;
+    position: relative;
+    z-index: 1;
+  }
+  /* Glowing Orbs Background */
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: -1;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  body::before {
+    top: -10%; left: -10%;
+    width: 50vw; height: 50vw;
+    background: radial-gradient(circle, rgba(108,99,255,0.5) 0%, transparent 70%);
+    animation: float1 15s ease-in-out infinite alternate;
+  }
+  body::after {
+    bottom: -10%; right: -10%;
+    width: 60vw; height: 60vw;
+    background: radial-gradient(circle, rgba(255,101,132,0.4) 0%, transparent 70%);
+    animation: float2 20s ease-in-out infinite alternate;
+  }
+  @keyframes float1 { 0% { transform: translate(0,0); } 100% { transform: translate(50px, 50px); } }
+  @keyframes float2 { 0% { transform: translate(0,0); } 100% { transform: translate(-50px, -50px); } }
+
+  .hero { text-align:center; padding:50px 20px 30px; max-width:750px; margin:0 auto; }
+  .badge { display:inline-flex; align-items:center; gap:8px; background:rgba(108,99,255,0.15);
+    border:1px solid rgba(108,99,255,0.3); border-radius:50px; padding:6px 18px; font-size:12px;
+    font-weight:600; color:var(--primary-light); letter-spacing:1px; text-transform:uppercase; margin-bottom:24px;
+    backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(108,99,255,0.15); }
+  .badge-dot { width:8px; height:8px; background:var(--accent); border-radius:50%; animation:pulse 2s infinite; box-shadow: 0 0 10px var(--accent); }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+  .hero h1 { font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.2; margin-bottom:16px;
+    background:linear-gradient(135deg,#fff 0%,#e0e0ff 50%,var(--secondary) 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .hero p { color:var(--text-muted); font-size:15px; line-height:1.6; max-width:550px; margin:0 auto 24px; }
+
+  .timer-bar { display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:25px; flex-wrap:wrap; }
+  .timer-item { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.08); border-radius:30px; padding:8px 16px; font-size:13px; font-weight:500;
+    backdrop-filter: blur(10px); }
+
+  /* PROGRESS */
+  .progress-wrapper { max-width:700px; margin:0 auto 30px; }
+  .progress-labels { display:flex; justify-content:space-between; margin-bottom:8px; font-size:13px; font-weight:600; color:var(--text-muted); }
+  .progress-bar-bg { height:8px; background:rgba(255,255,255,0.05); border-radius:10px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
+  .progress-bar-fill { height:100%; background:linear-gradient(90deg,var(--primary),var(--secondary));
+    border-radius:10px; width:0%; transition:width 0.5s cubic-bezier(0.4, 0, 0.2, 1); position:relative; }
+  .progress-bar-fill::after { content:''; position:absolute; top:0; left:0; bottom:0; right:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation:shimmer 2s infinite; }
+  @keyframes shimmer { 0% { transform:translateX(-100%); } 100% { transform:translateX(100%); } }
+
+  /* STEPS */
+  .steps-nav { display:flex; justify-content:center; gap:12px; margin:0 auto 35px; max-width:700px; flex-wrap:wrap; }
+  .step-dot { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;
+    color:var(--text-muted); cursor:pointer; transition:all 0.3s; backdrop-filter: blur(5px); }
+  .step-dot.active { background:linear-gradient(135deg,var(--primary),var(--primary-light)); border-color:var(--primary); color:#fff;
+    box-shadow:0 0 20px rgba(108,99,255,0.5); transform:scale(1.1); }
+  .step-dot.done { background:rgba(67,233,123,0.15); border-color:var(--accent); color:var(--accent); }
+  .step-line { width:40px; height:2px; background:rgba(255,255,255,0.1); align-self:center; border-radius:2px; transition:all 0.3s; }
+  .step-line.done { background:var(--accent); box-shadow: 0 0 10px rgba(67,233,123,0.3); }
+
+  /* CARDS (Glassmorphism) */
+  .form-container { max-width:700px; margin:0 auto; }
+  .step-panel { display:none; animation:fadeIn 0.4s ease; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+  .step-panel.active { display:block; }
+
+  .section-card { background:var(--card); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border:1px solid var(--border); box-shadow:0 10px 40px rgba(0,0,0,0.2); border-radius:24px;
+    padding:32px; margin-bottom:20px; position:relative; overflow:hidden; transition:transform 0.3s, box-shadow 0.3s; }
+  .section-card:hover { box-shadow:0 15px 50px rgba(0,0,0,0.3); border-color:rgba(255,255,255,0.15); }
+  .section-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; border-radius:24px 24px 0 0; }
+  .section-card.blue::before   { background:linear-gradient(90deg,#6C63FF,#8B85FF); }
+  .section-card.pink::before   { background:linear-gradient(90deg,#FF6584,#FF9A9E); }
+  .section-card.green::before  { background:linear-gradient(90deg,#43E97B,#38F9D7); }
+  .section-card.orange::before { background:linear-gradient(90deg,#F7971E,#FFD200); }
+  .section-card.purple::before { background:linear-gradient(90deg,#A855F7,#6C63FF); }
+
+  .section-header { display:flex; align-items:center; gap:16px; margin-bottom:28px; }
+  .section-emoji { width:48px; height:48px; border-radius:14px; display:flex; align-items:center;
+    justify-content:center; font-size:24px; flex-shrink:0; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+  .section-emoji.blue   { background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(108,99,255,0.05)); }
+  .section-emoji.pink   { background:linear-gradient(135deg,rgba(255,101,132,0.2),rgba(255,101,132,0.05)); }
+  .section-emoji.green  { background:linear-gradient(135deg,rgba(67,233,123,0.2),rgba(67,233,123,0.05)); }
+  .section-emoji.orange { background:linear-gradient(135deg,rgba(247,151,30,0.2),rgba(247,151,30,0.05)); }
+  .section-emoji.purple { background:linear-gradient(135deg,rgba(168,85,247,0.2),rgba(168,85,247,0.05)); }
+  .section-title { font-size:18px; font-weight:700; letter-spacing:-0.3px; }
+  .section-subtitle { font-size:13px; color:var(--text-muted); margin-top:4px; font-weight:500; }
+
+  /* FIELDS */
+  .fields-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:550px) { .fields-grid { grid-template-columns:1fr; } }
+  .field-group { display:flex; flex-direction:column; gap:8px; }
+  .field-group.full { grid-column:1/-1; }
+  label { font-size:12px; font-weight:600; color:var(--text-muted); letter-spacing:.8px; text-transform:uppercase; }
+  label .req { color:var(--secondary); margin-left:3px; }
+  
+  input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],select,textarea {
+    background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:12px;
+    padding:14px 16px; color:var(--text); font-family:'Inter',sans-serif; font-size:14px; width:100%;
+    transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline:none; -webkit-appearance:none;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+  
+  input::placeholder,textarea::placeholder { color:rgba(255,255,255,0.3); }
+  
+  input:hover,select:hover,textarea:hover { border-color:rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); }
+  
+  input:focus,select:focus,textarea:focus { 
+    border-color:var(--primary-light); 
+    background:rgba(108,99,255,0.05);
+    box-shadow:0 0 0 4px rgba(108,99,255,0.15), inset 0 2px 4px rgba(0,0,0,0.05); 
+    transform:translateY(-1px);
+  }
+  
+  input.filled { border-color:rgba(67,233,123,0.3); background:rgba(67,233,123,0.02); }
+  select option { background:#1A1A2E; color:var(--text); }
+  
+  .money-wrapper { position:relative; }
+  .money-wrapper input { padding-left:42px; font-weight:600; }
+  .money-symbol { position:absolute; left:16px; top:50%; transform:translateY(-50%); color:var(--accent2); font-weight:700; font-size:16px; }
+
+  /* PILLS */
+  .pills-group { display:flex; flex-wrap:wrap; gap:10px; }
+  .pill-label { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.1); border-radius:30px; padding:10px 18px;
+    font-size:13px; font-weight:500; cursor:pointer; transition:all 0.3s; user-select:none; }
+  .pill-label:hover { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.08); transform:translateY(-1px); }
+  .pill-label input { display:none; }
+  .pill-label.active { 
+    background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(139,133,255,0.1));
+    border-color:var(--primary-light); color:#fff; 
+    box-shadow:0 4px 15px rgba(108,99,255,0.2); 
+  }
+
+  /* FILE UPLOAD */
+  .upload-slots { display:flex; flex-direction:column; gap:16px; }
+  .upload-slot { background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.15);
+    border-radius:16px; padding:20px; transition:all 0.3s; }
+  .upload-slot:hover { border-color:var(--primary); background:rgba(108,99,255,0.03); }
+  .slot-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0; }
+  .slot-title { font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; }
+  .slot-upload-btn { display:inline-flex; align-items:center; gap:8px; padding:8px 18px;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px;
+    font-size:13px; font-weight:600; color:var(--text); cursor:pointer; transition:all 0.3s; }
+  .slot-upload-btn:hover { background:var(--primary); border-color:var(--primary); color:#fff; box-shadow:0 4px 12px rgba(108,99,255,0.3); }
+  .slot-file-name { font-size:13px; color:var(--accent); margin-top:12px; display:none; font-weight:500; background:rgba(67,233,123,0.1); padding:8px 12px; border-radius:8px; }
+  .slot-file-name.visible { display:inline-block; }
+
+  .doc-required { font-size:10px; font-weight:800; padding:4px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px; }
+  .doc-required.obl { background:rgba(255,101,132,0.15); color:var(--secondary); border:1px solid rgba(255,101,132,0.3); }
+  .doc-required.opt { background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); }
+
+  /* NAVIGATION BUTTONS */
+  .nav-buttons { display:flex; justify-content:space-between; align-items:center; gap:16px;
+    margin-top:30px; padding-bottom:30px; }
+  .btn-back { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1);
+    border-radius:14px; padding:14px 28px; color:var(--text-muted); font-family:'Inter',sans-serif;
+    font-size:14px; font-weight:600; cursor:pointer; transition:all 0.3s; backdrop-filter:blur(5px); }
+  .btn-back:hover { background:rgba(255,255,255,0.1); color:var(--text); transform:translateY(-2px); }
+  
+  .btn-next { display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    background:linear-gradient(135deg,var(--primary),#8B85FF); color:#fff; border:none;
+    border-radius:14px; padding:15px 32px; font-family:'Inter',sans-serif; font-size:15px;
+    font-weight:700; cursor:pointer; transition:all 0.3s; box-shadow:0 8px 25px rgba(108,99,255,0.3); }
+  .btn-next:hover { transform:translateY(-3px); box-shadow:0 12px 35px rgba(108,99,255,0.5); filter:brightness(1.1); }
+  .btn-next:disabled { opacity:0.5; cursor:not-allowed; transform:none; filter:grayscale(1); box-shadow:none; }
+
+  /* SUMMARY */
+  .summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+  @media (max-width:500px) { .summary-grid { grid-template-columns:1fr; } }
+  .summary-item { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:14px; padding:16px; transition:background 0.3s; }
+  .summary-item:hover { background:rgba(255,255,255,0.05); }
+  .summary-label { font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .summary-value { font-size:15px; font-weight:600; color:var(--text); }
+  .amount-display { font-size:36px; font-weight:800; color:var(--accent2); text-shadow:0 4px 15px rgba(247,151,30,0.3); margin:10px 0; }
+
+  /* SUCCESS */
+  #success-screen { display:none; text-align:center; padding:80px 20px; max-width:650px; margin:0 auto; animation:fadeIn 0.5s ease; }
+  .success-icon { width:110px; height:110px; background:linear-gradient(135deg,var(--accent),#38F9D7);
+    border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:50px;
+    margin:0 auto 30px; animation:bounceIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 15px 40px rgba(67,233,123,0.4); }
+  @keyframes bounceIn { 0%{transform:scale(0);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+  
+  .success-num { display:inline-block; background:rgba(108,99,255,0.1); border:1px solid rgba(108,99,255,0.3);
+    border-radius:16px; padding:16px 32px; font-size:26px; font-weight:800; color:var(--primary-light);
+    margin:20px 0; letter-spacing:3px; backdrop-filter:blur(10px); }
+    
+  .success-steps { text-align:left; background:rgba(26,26,46,0.6); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.08); border-radius:20px;
+    padding:28px; margin-top:30px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+  .success-step { display:flex; align-items:center; gap:16px; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+  .success-step:last-child { border-bottom:none; }
+  .step-num-badge { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--primary-light));
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; flex-shrink:0; box-shadow:0 4px 10px rgba(108,99,255,0.3); }
+  .step-text { font-size:14px; color:var(--text-muted); line-height:1.5; font-weight:500; }
+  .step-text strong { color:var(--text); font-weight:700; }
+
+  /* UPLOADING OVERLAY */
+  #upload-overlay { display:none; position:fixed; inset:0; background:rgba(11, 11, 20, 0.9); backdrop-filter:blur(10px);
+    z-index:1000; align-items:center; justify-content:center; flex-direction:column; gap:24px; }
+  #upload-overlay.visible { display:flex; animation:fadeIn 0.3s ease; }
+  .spinner { width:70px; height:70px; border:4px solid rgba(108,99,255,0.1);
+    border-top:4px solid var(--primary-light); border-radius:50%; animation:spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .upload-status { font-size:15px; color:var(--text-muted); font-weight:500; }
+  .upload-status-main { font-size:22px; color:var(--text); font-weight:800; letter-spacing:-0.5px; }
+
+  /* ERROR */
+  .error-msg { display:none; background:rgba(255,101,132,0.1); border:1px solid rgba(255,101,132,0.3);
+    border-radius:12px; padding:14px 18px; font-size:14px; color:var(--secondary); font-weight:600; margin-top:16px; }
+  .error-msg.visible { display:block; animation:shake 0.4s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+</style>
+</head>
+<body>
+
+<!-- UPLOAD OVERLAY -->
+<div id="upload-overlay">
+  <div class="spinner"></div>
+  <div class="upload-status-main" id="overlay-title">Envoi du dossier en cours…</div>
+  <div class="upload-status" id="overlay-status">Connexion à la base de données…</div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge"><span class="badge-dot"></span>Débloqueur Facture-Fantôme · 2026</div>
+  <h1>Déposez votre dossier en 3 étapes ⚡</h1>
+  <p>Remplissez le formulaire, uploadez vos documents, et notre système envoie automatiquement la réclamation au marketplace en moins d'une heure.</p>
+  <div class="timer-bar">
+    <div class="timer-item">⏱️ ~3 minutes</div>
+    <div class="timer-item">🔒 100% sécurisé (Supabase)</div>
+    <div class="timer-item">💶 0€ si on échoue</div>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="progress-wrapper">
+  <div class="progress-labels">
+    <span id="step-label">Étape 1 sur 3</span>
+    <span id="progress-pct">0%</span>
+  </div>
+  <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+</div>
+
+<!-- STEPS NAV -->
+<div class="steps-nav">
+  <div class="step-dot active" id="dot-1">1</div>
+  <div class="step-line" id="line-1"></div>
+  <div class="step-dot" id="dot-2">2</div>
+  <div class="step-line" id="line-2"></div>
+  <div class="step-dot" id="dot-3">3</div>
+</div>
+
+<!-- FORM CONTAINER -->
+<div class="form-container">
+
+  <!-- STEP 1 : INFOS + FACTURE -->
+  <div class="step-panel active" id="step-1">
+    <div class="section-card blue">
+      <div class="section-header">
+        <div class="section-emoji blue">🏢</div>
+        <div><div class="section-title">Votre Entreprise</div><div class="section-subtitle">Informations de base</div></div>
+      </div>
+      <div class="fields-grid">
+        <div class="field-group"><label>Nom de l'entreprise <span class="req">*</span></label>
+          <input type="text" id="company" placeholder="Bricol&Co SARL" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>SIRET <span class="req">*</span></label>
+          <input type="text" id="siret" placeholder="123 456 789 00012" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>Nom du dirigeant <span class="req">*</span></label>
+          <input type="text" id="manager" placeholder="Prénom Nom" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>Email <span class="req">*</span></label>
+          <input type="email" id="email" placeholder="vous@entreprise.fr" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>Téléphone <span class="req">*</span></label>
+          <input type="tel" id="phone" placeholder="06 00 00 00 00" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>Ville</label>
+          <input type="text" id="city" placeholder="Paris, Lyon…" oninput="updateProgress()"></div>
+      </div>
+    </div>
+
+    <div class="section-card pink">
+      <div class="section-header">
+        <div class="section-emoji pink">🔒</div>
+        <div><div class="section-title">La Facture Bloquée</div><div class="section-subtitle">Détails du blocage</div></div>
+      </div>
+      <div class="fields-grid">
+        <div class="field-group"><label>Marketplace <span class="req">*</span></label>
+          <select id="marketplace" required onchange="updateProgress()">
+            <option value="">Sélectionnez…</option>
+            <option value="ManoMano">🛠️ ManoMano</option>
+            <option value="Cdiscount Pro">🛒 Cdiscount Pro</option>
+            <option value="Rakuten">📦 Rakuten Business</option>
+            <option value="Amazon">🌍 Amazon Seller</option>
+            <option value="Fnac">👗 Fnac Marketplace</option>
+            <option value="La Redoute">🏠 La Redoute / Mirakl</option>
+            <option value="BackMarket">♻️ BackMarket</option>
+            <option value="Autre">❓ Autre</option>
+          </select></div>
+        <div class="field-group"><label>ID Vendeur</label>
+          <input type="text" id="seller-id" placeholder="MAN-FR-00987" oninput="updateProgress()"></div>
+        <div class="field-group"><label>N° Facture <span class="req">*</span></label>
+          <input type="text" id="invoice-num" placeholder="2026-00123" required oninput="updateProgress()"></div>
+        <div class="field-group"><label>Montant bloqué (€) <span class="req">*</span></label>
+          <div class="money-wrapper"><span class="money-symbol">€</span>
+          <input type="number" id="amount" placeholder="1 300" min="1" required oninput="updateProgress()"></div></div>
+        <div class="field-group"><label>Date de blocage <span class="req">*</span></label>
+          <input type="date" id="block-date" required onchange="updateProgress()"></div>
+        <div class="field-group"><label>N° Ticket support</label>
+          <input type="text" id="ticket-num" placeholder="98765" oninput="updateProgress()"></div>
+      </div>
+      <div style="margin-top:16px;">
+        <label style="display:block;margin-bottom:8px;">Raison du blocage (plusieurs choix possibles)</label>
+        <div class="pills-group" id="reason-pills">
+          <label class="pill-label"><input type="checkbox" name="reason" value="doc_manquant" onchange="this.parentElement.classList.toggle('active', this.checked)">📄 Document manquant</label>
+          <label class="pill-label"><input type="checkbox" name="reason" value="litige_acheteur" onchange="this.parentElement.classList.toggle('active', this.checked)">⚠️ Litige acheteur</label>
+          <label class="pill-label"><input type="checkbox" name="reason" value="verification" onchange="this.parentElement.classList.toggle('active', this.checked)">🔍 Compte sous vérification</label>
+          <label class="pill-label"><input type="checkbox" name="reason" value="bancaire" onchange="this.parentElement.classList.toggle('active', this.checked)">🏦 Problème bancaire</label>
+          <label class="pill-label"><input type="checkbox" name="reason" value="aucune" onchange="this.parentElement.classList.toggle('active', this.checked)">❓ Aucune raison</label>
+          <label class="pill-label"><input type="checkbox" name="reason" value="colis" onchange="this.parentElement.classList.toggle('active', this.checked)">📦 Colis non reçu</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-buttons">
+      <div></div>
+      <button class="btn-next" type="button" onclick="goToStep(2)">Étape suivante →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 : UPLOAD DOCUMENTS -->
+  <div class="step-panel" id="step-2">
+    <div class="section-card purple">
+      <div class="section-header">
+        <div class="section-emoji purple">📁</div>
+        <div><div class="section-title">Vos Documents PDF</div>
+          <div class="section-subtitle">Uploadez vos pièces justificatives directement ici</div></div>
+      </div>
+
+      <div class="upload-slots">
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">📄 Facture envoyée à l'acheteur <span class="doc-required obl">Obligatoire</span></div>
+            <label class="slot-upload-btn" for="file-facture">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-facture" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'facture')">
+          <div class="slot-file-name" id="name-facture"></div>
+        </div>
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">🚚 Bon de livraison / Tracking <span class="doc-required obl">Obligatoire</span></div>
+            <label class="slot-upload-btn" for="file-tracking">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-tracking" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'tracking')">
+          <div class="slot-file-name" id="name-tracking"></div>
+        </div>
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">🏢 Extrait Kbis (- de 3 mois) <span class="doc-required obl">Obligatoire</span></div>
+            <label class="slot-upload-btn" for="file-kbis">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-kbis" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'kbis')">
+          <div class="slot-file-name" id="name-kbis"></div>
+        </div>
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">🏦 RIB bancaire de l'entreprise <span class="doc-required obl">Obligatoire</span></div>
+            <label class="slot-upload-btn" for="file-rib">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-rib" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'rib')">
+          <div class="slot-file-name" id="name-rib"></div>
+        </div>
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">📸 Capture d'écran tableau de bord "En attente" <span class="doc-required obl">Obligatoire</span></div>
+            <label class="slot-upload-btn" for="file-screenshot">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-screenshot" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'screenshot')">
+          <div class="slot-file-name" id="name-screenshot"></div>
+        </div>
+
+        <div class="upload-slot">
+          <div class="slot-header">
+            <div class="slot-title">💬 Échanges avec le support marketplace <span class="doc-required opt">Optionnel</span></div>
+            <label class="slot-upload-btn" for="file-support">📎 Choisir</label>
+          </div>
+          <input type="file" id="file-support" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this,'support')">
+          <div class="slot-file-name" id="name-support"></div>
+        </div>
+
+      </div>
+
+      <div class="error-msg" id="upload-error">⚠️ Veuillez uploader les 5 documents obligatoires avant de continuer.</div>
+
+      <div style="margin-top:16px; padding:14px; background:rgba(108,99,255,0.08); border:1px solid rgba(108,99,255,0.2); border-radius:12px; font-size:13px; color:var(--text-muted);">
+        📋 <strong style="color:var(--text);">Formats acceptés :</strong> PDF, JPG, PNG · Max 10 MB par fichier
+      </div>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="btn-back" type="button" onclick="goToStep(1)">← Retour</button>
+      <button class="btn-next" type="button" onclick="goToStep(3)">Vérifier et envoyer →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 : RECAP + SUBMIT -->
+  <div class="step-panel" id="step-3">
+    <div class="section-card green">
+      <div class="section-header">
+        <div class="section-emoji green">✅</div>
+        <div><div class="section-title">Récapitulatif de votre dossier</div>
+          <div class="section-subtitle">Vérifiez avant d'envoyer</div></div>
+      </div>
+
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">Montant à récupérer</div>
+        <div class="amount-display" id="recap-amount">0 €</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Notre commission si succès : <strong style="color:var(--accent2);" id="recap-commission">0 €</strong></div>
+      </div>
+
+      <div class="summary-grid" id="summary-grid"></div>
+
+      <div style="margin-top:18px;">
+        <label style="display:block; margin-bottom:8px;">Documents uploadés ✅</label>
+        <div id="docs-recap" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      </div>
+
+      <div style="margin-top:18px; padding:14px; background:rgba(67,233,123,0.08); border:1px solid rgba(67,233,123,0.2); border-radius:12px;">
+        <p style="font-size:13px; color:var(--accent); font-weight:600; margin-bottom:6px;">🤖 Ce qui va se passer automatiquement :</p>
+        <p style="font-size:12px; color:var(--text-muted); line-height:1.7;">
+          1️⃣ Votre dossier est sauvegardé dans notre base de données<br>
+          2️⃣ La lettre de réclamation est générée en 30 secondes<br>
+          3️⃣ Elle est envoyée au support <span id="recap-marketplace" style="color:var(--text); font-weight:600;"></span><br>
+          4️⃣ Vous recevez un accusé de réception par email<br>
+          5️⃣ Relances automatiques toutes les 48h jusqu'au déblocage
+        </p>
+      </div>
+
+      <div class="error-msg" id="submit-error"></div>
+    </div>
+
+    <div style="padding:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-bottom:16px;">
+      <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+        <input type="checkbox" id="accept-terms" style="margin-top:2px; width:auto;">
+        <span style="font-size:13px; color:var(--text-muted); line-height:1.5;">
+          J'accepte que le Débloqueur Facture-Fantôme agisse en mon nom pour récupérer ce paiement. Je comprends que la commission (20%) n'est due qu'en cas de succès.
+        </span>
+      </label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="btn-back" type="button" onclick="goToStep(2)">← Modifier</button>
+      <button class="btn-next" type="button" onclick="submitDossier()" id="submit-btn">
+        🚀 Envoyer mon dossier maintenant
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- SUCCESS -->
+<div id="success-screen">
+  <div class="success-icon">🎉</div>
+  <h2 style="font-size:26px; font-weight:800; margin-bottom:12px;">Dossier envoyé avec succès !</h2>
+  <p style="color:var(--text-muted); margin-bottom:16px;">Votre numéro de dossier :</p>
+  <div class="success-num" id="success-num">DFF-2026-001</div>
+  <p style="color:var(--text-muted); font-size:14px; margin:16px 0;">Vous allez recevoir un email de confirmation sur <strong id="success-email" style="color:var(--text);"></strong></p>
+
+  <div class="success-steps">
+    <div class="success-step">
+      <div class="step-num-badge">1</div>
+      <div class="step-text">✅ <strong>Dossier enregistré</strong> dans notre base de données sécurisée (Supabase)</div>
+    </div>
+    <div class="success-step">
+      <div class="step-num-badge">2</div>
+      <div class="step-text">⚙️ <strong>Lettre de réclamation</strong> en cours de génération automatique…</div>
+    </div>
+    <div class="success-step">
+      <div class="step-num-badge">3</div>
+      <div class="step-text">📧 <strong>Envoi au support marketplace</strong> dans les 30 prochaines minutes</div>
+    </div>
+    <div class="success-step">
+      <div class="step-num-badge">4</div>
+      <div class="step-text">🔁 <strong>Relances automatiques</strong> toutes les 48h jusqu'au déblocage</div>
+    </div>
+    <div class="success-step">
+      <div class="step-num-badge">5</div>
+      <div class="step-text">💶 <strong>Commission de 20%</strong> uniquement si votre argent est récupéré</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== SUPABASE CONFIG =====
+const SUPABASE_URL = 'https://mkvnqpwibwzgovxulrzj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rdm5xcHdpYnd6Z292eHVscnpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NzAyOTIsImV4cCI6MjA5NjA0NjI5Mn0.OVMlnXiDYI3LD-0999DxQPTJq152Yoplv1grWZCV2H8';
+const WEBHOOK_URL = 'https://n8n.srv1728390.hstgr.cloud/webhook/nouveau-dossier';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===== STATE =====
+let currentStep = 1;
+const uploadedFiles = {}; // { facture: File, tracking: File, ... }
+const docLabels = {
+  facture: '📄 Facture', tracking: '🚚 Tracking', kbis: '🏢 Kbis',
+  rib: '🏦 RIB', screenshot: '📸 Capture', support: '💬 Support'
+};
+const requiredDocs = ['facture','tracking','kbis','rib','screenshot'];
+
+// ===== STEP NAVIGATION =====
+function goToStep(n) {
+  if (n === 2) {
+    // Validate step 1
+    const req = ['company','siret','manager','email','phone','marketplace','invoice-num','amount','block-date'];
+    const missing = req.filter(id => !document.getElementById(id).value.trim());
+    if (missing.length > 0) {
+      document.getElementById(missing[0]).focus();
+      document.getElementById(missing[0]).style.borderColor = 'var(--secondary)';
+      return;
+    }
+  }
+  if (n === 3) {
+    // Validate required docs
+    const missing = requiredDocs.filter(d => !uploadedFiles[d]);
+    if (missing.length > 0) {
+      document.getElementById('upload-error').classList.add('visible');
+      return;
+    }
+    document.getElementById('upload-error').classList.remove('visible');
+    buildSummary();
+  }
+
+  document.getElementById(`step-${currentStep}`).classList.remove('active');
+  document.getElementById(`dot-${currentStep}`).classList.remove('active');
+  document.getElementById(`dot-${currentStep}`).classList.add('done');
+  if (currentStep < 3) document.getElementById(`line-${currentStep}`).classList.add('done');
+
+  currentStep = n;
+  document.getElementById(`step-${currentStep}`).classList.add('active');
+  document.getElementById(`dot-${currentStep}`).classList.add('active');
+  document.getElementById(`dot-${currentStep}`).classList.remove('done');
+
+  const pct = Math.round(((n-1)/3)*100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('step-label').textContent = `Étape ${n} sur 3`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== FILE HANDLING =====
+function handleFileSelect(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Fichier trop volumineux (max 10MB)'); return;
+  }
+  uploadedFiles[type] = file;
+  const el = document.getElementById(`name-${type}`);
+  el.textContent = `✅ ${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+  el.classList.add('visible');
+  document.getElementById('upload-error').classList.remove('visible');
+}
+
+// ===== SUMMARY =====
+function buildSummary() {
+  const amount = parseFloat(document.getElementById('amount').value) || 0;
+  const commission = (amount * 0.20).toFixed(0);
+  document.getElementById('recap-amount').textContent = amount.toLocaleString('fr-FR') + ' €';
+  document.getElementById('recap-commission').textContent = parseInt(commission).toLocaleString('fr-FR') + ' €';
+  document.getElementById('recap-marketplace').textContent = document.getElementById('marketplace').value;
+
+  const fields = [
+    { label:'Entreprise', id:'company' }, { label:'SIRET', id:'siret' },
+    { label:'Dirigeant', id:'manager' }, { label:'Email', id:'email' },
+    { label:'Téléphone', id:'phone' }, { label:'Marketplace', id:'marketplace' },
+    { label:'N° Facture', id:'invoice-num' }, { label:'Date blocage', id:'block-date' },
+  ];
+  const grid = document.getElementById('summary-grid');
+  grid.innerHTML = fields.map(f => `
+    <div class="summary-item">
+      <div class="summary-label">${f.label}</div>
+      <div class="summary-value">${document.getElementById(f.id).value || '—'}</div>
+    </div>`).join('');
+
+  const docsRecap = document.getElementById('docs-recap');
+  docsRecap.innerHTML = Object.keys(uploadedFiles).map(k =>
+    `<div style="background:rgba(67,233,123,0.1);border:1px solid rgba(67,233,123,0.25);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--accent);">${docLabels[k]}</div>`
+  ).join('');
+}
+
+// ===== SUBMIT =====
+async function submitDossier() {
+  if (!document.getElementById('accept-terms').checked) {
+    document.getElementById('submit-error').textContent = '⚠️ Veuillez accepter les conditions.';
+    document.getElementById('submit-error').classList.add('visible');
+    return;
+  }
+  document.getElementById('submit-error').classList.remove('visible');
+
+  const overlay = document.getElementById('upload-overlay');
+  overlay.classList.add('visible');
+  setOverlay('Connexion sécurisée…', 'Préparation de votre dossier');
+
+  try {
+    // 1. Get selected reasons
+    const reasons = Array.from(document.querySelectorAll('input[name="reason"]:checked')).map(el => el.value).join(', ');
+
+    // 2. Insert dossier in Supabase
+    setOverlay('Enregistrement du dossier…', 'Sauvegarde dans la base de données');
+    const { data: dossier, error: insertErr } = await db.from('dossiers').insert({
+      company: document.getElementById('company').value,
+      siret: document.getElementById('siret').value,
+      manager_name: document.getElementById('manager').value,
+      email: document.getElementById('email').value,
+      phone: document.getElementById('phone').value,
+      city: document.getElementById('city').value,
+      marketplace: document.getElementById('marketplace').value,
+      seller_id: document.getElementById('seller-id').value,
+      invoice_num: document.getElementById('invoice-num').value,
+      amount: parseFloat(document.getElementById('amount').value),
+      block_date: document.getElementById('block-date').value,
+      ticket_num: document.getElementById('ticket-num').value,
+      reasons: reasons,
+      statut: 'docs_recus'
+    }).select().single();
+
+    if (insertErr) throw new Error('Erreur base de données: ' + insertErr.message);
+
+    const dossierId = dossier.id;
+    const dossierNum = dossier.num_dossier;
+
+    // 3. Upload each file to Supabase Storage
+    const docsUrls = {};
+    const fileKeys = Object.keys(uploadedFiles);
+    for (let i = 0; i < fileKeys.length; i++) {
+      const key = fileKeys[i];
+      const file = uploadedFiles[key];
+      setOverlay(`Upload ${docLabels[key]}…`, `Document ${i+1} sur ${fileKeys.length}`);
+      const ext = file.name.split('.').pop();
+      const path = `${dossierId}/${key}.${ext}`;
+      const { error: upErr } = await db.storage.from('documents').upload(path, file, { upsert: true });
+      if (upErr) throw new Error('Erreur upload ' + key + ': ' + upErr.message);
+      const { data: urlData } = db.storage.from('documents').getPublicUrl(path);
+      docsUrls[key] = urlData.publicUrl;
+    }
+
+    // 4. Update dossier with file URLs
+    setOverlay('Finalisation…', 'Mise à jour du dossier avec les documents');
+    await db.from('dossiers').update({ docs_urls: docsUrls }).eq('id', dossierId);
+
+    // 5. Trigger Make.com webhook
+    setOverlay('Déclenchement du workflow…', 'Envoi au système automatique');
+    if (WEBHOOK_URL !== '') {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dossier_id: dossierId,
+          num_dossier: dossierNum,
+          company: dossier.company,
+          email: dossier.email,
+          marketplace: dossier.marketplace,
+          invoice_num: dossier.invoice_num,
+          amount: dossier.amount,
+          docs_urls: docsUrls
+        })
+      });
+    }
+
+    // 6. Show success
+    overlay.classList.remove('visible');
+    document.querySelector('.hero').style.display = 'none';
+    document.querySelector('.progress-wrapper').style.display = 'none';
+    document.querySelector('.steps-nav').style.display = 'none';
+    document.querySelector('.form-container').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'block';
+    document.getElementById('success-num').textContent = dossierNum;
+    document.getElementById('success-email').textContent = dossier.email;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  } catch (err) {
+    overlay.classList.remove('visible');
+    document.getElementById('submit-error').textContent = '❌ Erreur : ' + err.message;
+    document.getElementById('submit-error').classList.add('visible');
+    console.error(err);
+  }
+}
+
+function setOverlay(title, status) {
+  document.getElementById('overlay-title').textContent = title;
+  document.getElementById('overlay-status').textContent = status;
+}
+
+// ===== UTILS =====
+function updateProgress() {
+  const req = ['company','siret','manager','email','phone','marketplace','invoice-num','amount','block-date'];
+  const filled = req.filter(id => document.getElementById(id) && document.getElementById(id).value.trim()).length;
+  const pct = Math.round((filled / req.length) * 33);
+  if (currentStep === 1) {
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
+  }
+}
+
+
+
+// Init date
+document.getElementById('block-date').valueAsDate = new Date();
+</script>
+</body>
+</html>
